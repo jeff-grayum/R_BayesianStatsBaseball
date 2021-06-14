@@ -1,0 +1,67 @@
+---
+title: "IntroEmpiricalBayes"
+author: "Jeff Grayum"
+date: "6/14/2021"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(ggthemes)
+library(Lahman)
+```
+
+
+Ch. 2.3 Conjugate prior
+```{r}
+#Number of Bernouli trials.
+num_trials <- 10e6
+
+#From book -> alpha = 81, beta = 29.  Data frame has 1 col of true average, and one of hits (out of 300).
+simulations <- data_frame(
+  true_average = 
+    rbeta(num_trials, 81, 219),
+  hits = rbinom(num_trials, 300,
+                true_average)
+)
+
+simulations 
+
+#How many got 100/300 (as in our hypothetical player?).
+
+hits_100 <- simulations %>%
+  filter(hits == 100) %>%
+  view()
+
+hits_100 %>%
+  ggplot(aes(true_average)) +
+  geom_histogram(bins = 50) +
+  theme_fivethirtyeight() +
+  labs(title = "Distribution of true batting averages for players with 100/300 hits",
+       x = "True batting average",
+       y = "Count") +
+  theme(axis.title = element_text(),
+        text = element_text(family = "Times New Roman")) +
+  geom_vline(aes(xintercept = 0.3), color = "grey", linetype = 2)
+
+#What if th eplayer had gotten 60, or 80 hits, out of 300?  Let's plot the density of each of these subsets of the simulation.
+
+simulations %>%
+  filter(hits %in% c(60, 80, 100)) %>%
+  ggplot(aes(true_average, color = factor(hits))) +
+  geom_density() +
+  labs(x = "True average of players with H hits / 300 at-bats",
+       color = "H",
+       y = "Density",
+       title = "Number of H hits / 300 and distribution of true batting averages") +
+  theme_fivethirtyeight() +
+  theme(axis.title = element_text(),
+        text = element_text(family = "Times New Roman"))
+```
+
