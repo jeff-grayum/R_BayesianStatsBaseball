@@ -15,6 +15,7 @@ knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(ggthemes)
 library(Lahman)
+library(stats4)
 ```
 
 
@@ -63,5 +64,73 @@ simulations %>%
   theme_fivethirtyeight() +
   theme(axis.title = element_text(),
         text = element_text(family = "Times New Roman"))
+```
+
+Now, we will begin looking at the batting dataset from the Lahman package.
+First, some cleaning.
+```{r}
+#Filter out those pitchers.
+Batting %>%
+  view()
+
+#Instead of joining batting and pitching datasets, we are filtering out players in the batting dataset who are in the pitching dataset (anit_join), by matching the playerID.  Also filtering out any players with 0 at-bats.  Then we are summarizing the total hits, total at bats, and creating a new column of batting averages (H / AB) for each player (group_by).
+career <- Batting %>%
+  filter(AB > 0) %>%
+  anti_join(Pitching, by = "playerID") %>%
+  group_by(playerID) %>%
+  summarize(H = sum(H),
+            AB = sum(AB)) %>%
+  mutate(average = H / AB)
+
+#Now, we'll include names with the playerID's.
+career <- Master %>%
+  tbl_df() %>%
+  dplyr::select(playerID, nameFirst, nameLast) %>%
+  unite(name, nameFirst, nameLast, sep = " ") %>%
+  inner_join(career, by = "playerID") %>%
+  dplyr::select(-playerID)
+
+#Notice, if we arrange by average, all the top players have very few at-bats!
+career %>%
+  arrange(desc(average))
+
+#The worst batters also have very few at-bats!
+career %>%
+  arrange(average)
+
+#Out of curiosity, who has a 0 average with the most at bats?
+career %>%
+  filter(average == 0) %>%
+  arrange(desc(AB))
+
+#These are both pretty bad ways to estimate who is the best and who is the worst!
+```
+
+3.2 Step 1.  Estimate a prior from all your data!
+```{r}
+career %>%
+  filter(AB >= 500) %>%
+  ggplot(aes(average)) +
+  geom_histogram(bins = 30)
+
+career_filtered <- career %>%
+  filter(AB > 500) 
+
+#log-likelihood function
+ll <- function(alpha, beta) {
+  x <- career_filtered$H
+  total <- career_filtered$AB
+  -sum(VGAM::dbetabinom.ab(x, total, alpha, beta, log = TRUE))
+}
+
+#Maximum likelihood estimation
+m <- mle(ll, start = list(alpha = 1, beta = 10), method = "L-BFGS-B",
+         lower = c(0.0001, .1))
+
+ab <- coef(m)
+alpha0 <- ab[1]  
+beta0 <- ab[2]
+
+#My estimates differ slightly from book... maybe dataset has been updated?
 ```
 
