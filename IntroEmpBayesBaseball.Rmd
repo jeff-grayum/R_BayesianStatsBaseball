@@ -216,7 +216,7 @@ yankee_1998_career %>%
   geom_point() +
   geom_errorbarh(aes(xmin = low, xmax = high)) +
   geom_vline(xintercept = alpha0 / (alpha0 + beta0), color = "red", lty = 2) +
-  labs(x = "Estimated batting average (w/ 95% interval",
+  labs(x = "Estimated batting average (w/ 95% interval)",
        y = "Player",
        title = "Empirical bayes estimated batting averages for 1998 Yankees",
        caption = "Vline = historical batting average") +
