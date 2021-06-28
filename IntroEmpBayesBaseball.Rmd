@@ -234,5 +234,206 @@ pbeta(0.3, 3873, 8883)
 #Thus, the probability of Hank Aaron's TRUE batting average of being less than .300 is 18.7%
 #This is called THE POSTERIOR ERROR PROBABILITY
 
+
+#Let's add the posterior error probability (that average is below .300) for each player!
+career_eb <- career_eb %>%
+  mutate(PEP = pbeta(0.300, alpha1, beta1)) %>%
+  arrange(PEP) %>%
+  view()
+
+career_eb %>%
+  ggplot(aes(PEP)) +
+  geom_histogram() +
+  theme_tufte() +
+  labs(x = "Posterior error probility",
+       y = "Count")
+
+
+career_eb %>%
+  ggplot(aes(eb_estimate, PEP, color = AB)) +
+  geom_point(alpha = 0.5) +
+  theme_few() +
+  labs(x = "Empirical bayes estimated batting average",
+       y = "Posterior error probability",
+       color = "At-bats",
+       caption = "As EB batting ave. increases, the PEP of ave. being below .300 decreases",
+       title = "Shrunken batting ave. vs PEP of ave. > 0.300") +
+  geom_vline(aes(xintercept = 0.3), lty = 2, color = "red")
+```
+
+Ch.5.3
+```{r}
+top_100 <- career_eb %>%
+  arrange(PEP) %>% 
+  head(100) %>%
+  view()
+
+top_200 <- career_eb %>%
+  arrange(PEP) %>%
+  head(200)
+
+top_100 %>%
+  summarise(total_errors = sum(PEP))
+#Thus, 6.25 players in our top 100 shouldnt have been included in our H.O.F. (ave. is actually less than 0.300)
+#(6.25/100)
+
+sorted_PEP <- career_eb %>%
+  arrange(PEP) %>% 
+  view()
+
+sum(top_100$PEP)
+mean(top_100$PEP)
+
+two_hundred_ave <- (sum(top_200$PEP)) / 200
+
+mean(top_200$PEP)
+
+mean(head(sorted_PEP$PEP, 50))
+
+mean(head(sorted_PEP$PEP, 200))
+
+
+#Lets just write a function.
+mean_PEP <- function(p) {
+  ave_PEP <- mean(head(sorted_PEP$PEP, p))
+  return(ave_PEP)
+}
+
+mean_PEP(50) 
+
+mean_PEP(100)
+
+mean_PEP(200)
+
+mean_PEP(100000)
+
+#Let's write a loop, because i forgot how.
+for(i in 1:length(top_100)) {
+  print(paste(top_100$name[i], "is ranked number", i, "in the all time greatest batters list, with an shrunken average of", top_100$eb_estimate[i]))
+}
+```
+
+Ch. 5.4 Q-values.
+```{r}
+career_eb <- career_eb %>%
+  arrange(PEP) %>%
+  mutate(qvalue = cummean(PEP)) %>%
+  view()
+
+#Now, if we want less than 5% error, only include players with a q-value of <.05
+career_eb %>%
+  filter(qvalue <= 0.05) %>%
+  view()
+```
+
+Bayesian A/B testing
+```{r}
+#Grab career batting average of non-pitchers (pitched <= 3 games) %>%
+pitchers <- Pitching %>%
+  group_by(playerID) %>%
+  summarize(gamesPitched = sum(G)) %>%
+  filter(gamesPitched > 3)
+
+career <- Batting %>%
+  filter(AB > 0) %>%
+  anti_join(pitchers, by = "playerID") %>%
+  summarize(H = sum(H),
+            AB = sum(AB)) %>%
+  mutate(average = H / AB)  
+
+
+career <- Master %>%
+  tbl_df() %>%
+  dplyr::select(playerID, nameFirst, nameLast) %>%
+  unite(name, nameFirst, nameLast, sep = " " ) %>%
+  inner_join(career, by = "playerID")
+
+alpha0 <- 101.4
+beta0 <- 287.3
+
+
+
+#Let's compare Hank Aaron adn Mike Piazza
+aaron <- career_eb %>%
+  filter(name == "Hank Aaron")
+
+piazza <- career_eb %>%
+  filter(name == "Mike Piazza")
+
+two_playes <- bind_rows(aaron, piazza) %>%
+  view()
+```
+
+6.2.1 Simulation of posterior draws.
+```{r}
+#Draw a million items from each players distribution using rbeta, compare the results.
+
+piazza_simulation <- rbeta(1000000, piazza$alpha1, piazza$beta1)
+aaron_simulation <- rbeta(1000000, aaron$alpha1, aaron$beta1)
+
+sim_results <- mean(piazza_simulation > aaron_simulation)
+
+sim_results
+#This gives us a 59% chance that Piazza is better than Aaron
+```
+
+6.2.2 Integration
+```{r}
+#Understand the section in the book and the concept, unsure why 0.29, 0.33 were chosen...
+d <- 0.00002
+limits <- seq(0.29, 0.33, d)
+sum(outer(limits, limits, function(x,y) {
+  (x > y) *
+    dbeta(x, piazza$alpha1, piazza$beta1) *
+    dbeta(y, aaron$alpha1, aaron$beta1) *
+    d ^ 2
+}))
+```
+
+6.2.3 CLosed-form solution
+```{r}
+#Prob that a random draw from A is greater than a random draw from B.  Uses calculus n stuff.
+
+h <- function(alpha_a, beta_a, 
+              alpha_b, beta_b) {
+ 
+   j <- seq.int(0, round(alpha_b)
+              -1)
+ 
+   log_vals <- (lbeta(alpha_a + j, beta_a + beta_b) - log(beta_b + j) -
+                 lbeta(1 + j, beta_b) - lbeta(alpha_a, beta_a))
+  
+   1-sum(exp(log_vals))
+   
+}
+
+h(piazza$alpha1, piazza$beta1,
+  aaron$alpha1, aaron$beta1)
+
+#Not a fucking clue why this works.
+```
+
+6.2.4 Closed-form approximation
+```{r}
+#as alpha1 and beta1 become, they very much look like a normal distribution.  Much easier to calculate the probability that one normal distribution is greater than the other, than beta with beta distributions!
+
+h_approx <- function(alpha_a, beta_a, alpha_b, beta_b){
+  
+  u1 <- alpha_a / (alpha_a + beta_a)
+  
+  u2 <- alpha_b / (alpha_b + beta_b)
+  
+  var1 <- (alpha_a * beta_a) /
+    ((alpha_a + beta_a) ^ 2 *
+       (alpha_a + beta_a + 1))
+  
+  var2 <- (alpha_b * beta_b) /
+    ((alpha_b + beta_b) ^ 2 *
+     (alpha_b + beta_b + 1))
+    
+  pnorm(0, u2 - u1, sqrt(var1 + var2))
+}
+
+h_approx(piazza$alpha1, piazza$beta1, aaron$alpha1, aaron$beta1)
 ```
 
