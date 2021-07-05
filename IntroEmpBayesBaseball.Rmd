@@ -360,7 +360,7 @@ aaron <- career_eb %>%
 piazza <- career_eb %>%
   filter(name == "Mike Piazza")
 
-two_playes <- bind_rows(aaron, piazza) %>%
+two_players <- bind_rows(aaron, piazza) %>%
   view()
 ```
 
@@ -435,5 +435,41 @@ h_approx <- function(alpha_a, beta_a, alpha_b, beta_b){
 }
 
 h_approx(piazza$alpha1, piazza$beta1, aaron$alpha1, aaron$beta1)
+```
+
+Chi-squared test to determine if there is a statistical difference between two players averages.
+```{r}
+prop.test(two_players$H, two_players$AB)
+
+#P-value of 0.7, the test couldn't find a difference.
+```
+
+6.3 Confidence and credible intervals
+```{r}
+credible_interval_approx <- function (a, b, c, d) {
+  u1 <- a / (a + b)
+  u2 <- c / (c + d) 
+  var1 <- a * b / ((a + b) ^ 2 * (a + b + 1))
+  var2 <- c * d / ((c + d) ^ 2 * (c + d + 1))
+  
+  mu_diff <- u2 - u1
+  sd_diff <- sqrt(var1 + var2)
+  
+  data_frame(posterior = pnorm(0, mu_diff, sd_diff),
+             estimate = mu_diff, 
+             conf.low = qnorm(0.025, mu_diff, sd_diff),
+             conf.high = qnorm(0.975, mu_diff, sd_diff))
+}
+
+credible_interval_approx(piazza$alpha1, piazza$beta1,
+                         aaron$alpha1, aaron$beta1)
+
+
+random_20 <- sample_n(career_eb, 20) %>%
+  select(-playerID) %>%
+  view()
+
+
+
 ```
 
