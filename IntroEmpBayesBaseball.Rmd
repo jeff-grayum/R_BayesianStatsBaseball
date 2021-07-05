@@ -468,8 +468,42 @@ credible_interval_approx(piazza$alpha1, piazza$beta1,
 random_20 <- sample_n(career_eb, 20) %>%
   select(-playerID) %>%
   view()
+```
 
+7.1
+```{r}
 
+#Notice that the better players are (logically) getting more AB's!
+career_eb %>%
+  filter((H / AB) < 0.5) %>%
+  ggplot(aes(AB, (H / AB))) +
+  geom_point() +
+  geom_smooth(method = lm, se = FALSE) +
+  theme_tufte() +
+  scale_x_log10() +
+  scale_y_continuous() +
+  labs(title = "Number of at-bats compared to raw batting average",
+       x = "At-bats (log scale)",
+       y = "Raw batting ave. (H/AB)",
+       caption = "Batters with fewer at-bats have more variance in our estimates") +
+  expand_limits(y = c(0, 0.5)) +
+  geom_hline(aes(yintercept = 0.261), color = "orange", lty = 2)
 
+career_eb %>%
+  ggplot(aes(AB, eb_estimate)) +
+  geom_point() +
+  geom_smooth(method = lm, se = FALSE) +
+  theme_tufte() +
+  scale_x_log10() +
+  scale_y_continuous() +
+  labs(title = "Number of at-bats compared to shrunken average",
+       x = "Number of at-bats (log scale)",
+       y = "Empirical Bayes batting average)",
+       caption = "Notice the number of at-bats no longer skews our estimates") +
+  expand_limits(y = c(0, 0.5)) +
+  geom_hline(aes(yintercept = 0.261), color = "orange", lty = 2)
+
+few %>%
+  summarize(median_ave = median(average))
 ```
 
