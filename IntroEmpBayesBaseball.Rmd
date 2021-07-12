@@ -16,6 +16,9 @@ library(tidyverse)
 library(ggthemes)
 library(Lahman)
 library(stats4)
+#install.packages("gamlss")
+library(gamlss)
+library(broom)
 ```
 
 
@@ -344,7 +347,7 @@ career <- Batting %>%
 
 career <- Master %>%
   tbl_df() %>%
-  dplyr::select(playerID, nameFirst, nameLast) %>%
+  dplyr::select(playerID, nameFirst, nameLast, bats) %>%
   unite(name, nameFirst, nameLast, sep = " " ) %>%
   inner_join(career, by = "playerID")
 
@@ -474,36 +477,153 @@ random_20 <- sample_n(career_eb, 20) %>%
 ```{r}
 
 #Notice that the better players are (logically) getting more AB's!
-career_eb %>%
+orig_ave <- career_eb %>%
   filter((H / AB) < 0.5) %>%
   ggplot(aes(AB, (H / AB))) +
   geom_point() +
-  geom_smooth(method = lm, se = FALSE) +
+  geom_smooth(method = lm, se = FALSE, color = "gray") +
   theme_tufte() +
   scale_x_log10() +
   scale_y_continuous() +
-  labs(title = "Number of at-bats compared to raw batting average",
+  labs(title = "Number of at-bats compared to orginal and adjusted batting averages",
        x = "At-bats (log scale)",
-       y = "Raw batting ave. (H/AB)",
-       caption = "Batters with fewer at-bats have more variance in our estimates") +
+       y = "Raw batting ave. (H/AB)") +
   expand_limits(y = c(0, 0.5)) +
   geom_hline(aes(yintercept = 0.261), color = "orange", lty = 2)
 
-career_eb %>%
+shrunken_eb <- career_eb %>%
   ggplot(aes(AB, eb_estimate)) +
   geom_point() +
-  geom_smooth(method = lm, se = FALSE) +
+  geom_smooth(method = lm, se = FALSE, color = "grey") +
   theme_tufte() +
   scale_x_log10() +
   scale_y_continuous() +
-  labs(title = "Number of at-bats compared to shrunken average",
-       x = "Number of at-bats (log scale)",
-       y = "Empirical Bayes batting average)",
-       caption = "Notice the number of at-bats no longer skews our estimates") +
+  labs(x = "At-bats (log scale)",
+       y = "Empirical Bayes batting average") +
   expand_limits(y = c(0, 0.5)) +
   geom_hline(aes(yintercept = 0.261), color = "orange", lty = 2)
 
 few %>%
   summarize(median_ave = median(average))
 ```
+
+We will account for the fact that the better players get more at-bats by fitting beta-binomial regression using maximum likelihood.
+```{r}
+fit <- gamlss(cbind(H, AB - H) ~ log(AB),
+              data = career_eb,
+              family = BB(mu.link = "identity"))
+
+#Now, let's pull out the coefficients using tidy(), from the broom package.
+td <- tidy(fit)
+td
+#This means that our new prior beta distribution *depends* on the value of AB.
+
+#First, calculate the mu and sigma parameters for each person.
+mu <- fitted(fit, parameter = "mu")
+sigma <- fitted(fit, parameter = "sigma")
+
+head(mu)
+head(sigma)
+
+#Now, we can calculate alpha0 and beta0 parameters for each person (our priors), and then update with each players H and AB's.
+
+career_eb <- career_eb %>%
+  dplyr::select(name, H, AB, original_eb = eb_estimate) %>%
+  mutate(mu = mu,
+         alpha0 = mu / sigma,
+         beta0 = (1 - mu) / sigma,
+         alpha1 = alpha0 + H,
+         beta1 = beta0 + AB - H,
+         estimate = alpha1 / (alpha1 + beta1)) %>%
+  view()
+
+career_eb_wAB %>%
+  ggplot(aes(original_eb, new_eb, color = AB)) +
+  geom_point(alpha = 0.7) +
+  theme_tufte() +
+  labs(x = "Original EB estimate",
+       y = "EB estimate with AB term",
+       color = "At-bats",
+       title = "How does including the AB term affect EB estimates?")
+
+
+
+new_eb <- career_eb_wAB %>%
+  ggplot(aes(AB, new_eb)) +
+  geom_point()  +
+  scale_x_log10() +
+  geom_smooth(method = lm, color = "gray") +
+  theme_tufte() +
+  labs(x = "At-bats (log scale)",
+       y = "EB estimate (including AB term)",
+       caption = "Notice: we know shrink towards *trend fit*, not overall ave.") +
+ expand_limits(y = c(0, 0.5)) +
+  geom_hline(aes(yintercept = 0.261), color = "orange", lty = 2)
+
+
+career_eb_wAB %>%
+  view()
+
+compare_aves <- gridExtra::grid.arrange(orig_ave, shrunken_eb, new_eb, ncol = 3)
+
+compare_aves
+```
+
+Ch 8. Empirical Bayes Hierarchical Modeling
+```{r}
+career_eb <- career_eb %>%
+  dplyr::select(name, H, AB, original_eb = eb_estimate) %>%
+  mutate(mu = mu,
+         alpha0 = mu / sigma,
+         beta0 = (1 - mu) / sigma,
+         alpha1 = alpha0 + H,
+         beta1 = beta0 + AB - H,
+         estimate = alpha1 / (alpha1 + beta1)) %>%
+  view()
+```
+
+8.2 Right and left-handed batters
+```{r}
+#Now we will incorporate "bats" to the formula in the formula in the gamlss call (our beta binomial regression)
+pitchers <- Pitching %>%
+  group_by(playerID) %>%
+  summarize(gamesPitched = sum(G)) %>%
+  filter(gamesPitched > 3)
+
+career <- Batting %>%
+  filter(AB > 0) %>%
+  anti_join(pitchers, by = "playerID") %>%
+  group_by(playerID) %>%
+  summarise(H = sum(H), AB = sum(AB), year = mean(yearID)) %>%
+  mutate(average = H/AB)
+
+career <- Master %>%
+  tbl_df() %>%
+  dplyr::select(playerID, nameFirst, nameLast, bats) %>%
+  unite(name, nameFirst, nameLast, sep = " ") %>%
+  inner_join(career, by = "playerID") 
+
+fit <- gamlss(cbind(H, AB - H) ~ log(AB),
+              data = dplyr::select(career, -bats),
+              family = BB(mu.link = "identity"))
+
+career_eb <- career %>%
+  mutate(mu = fitted(fit, "mu"),
+         sigma = fitted(fit, "sigma"),
+         alpha0 = mu / sigma,
+         beta0 = (1 - mu) / sigma,
+         alpha1 = alpha0 + H,
+         beta1 = beta0 + AB - H,
+         estimate = alpha1 / (alpha1 + beta1))
+
+career2 <- career %>%
+  filter(!is.na(bats)) %>%
+  mutate(bats = relevel(bats, "R")) 
+
+fit2 <- gamlss(cbind(H, AB - H)
+               ~log(AB) + bats,
+               data = career2,
+               family = BB(mu.link = "identity"))
+
+tidy(fit2)
 
