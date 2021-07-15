@@ -19,6 +19,7 @@ library(stats4)
 #install.packages("gamlss")
 library(gamlss)
 library(broom)
+library(splines)
 ```
 
 
@@ -630,18 +631,22 @@ tidy(fit2)
 
 8.3 Over time
 ```{r}
-#Notice how averages change over time! We need to incorporate this into our priors.
+#Notice how averages change over time! We need to incorporate this nonlinear trend into our priors.
 career2 %>%
   mutate(decade = (year %/%10) * 10) %>%
-  filter(average <= 0.35,
-         average > 0.13) %>%
+  filter(AB >= 500) %>%
   ggplot(aes(decade, average, group = decade)) +
   geom_boxplot() +
   theme_few() +
-  expand_limits(ymin = 0, ymax = 0.4) +
-  labs(title = "Batting averages across decades",
+  labs(title = "Mean batting averages across decades",
        x = "Decade",
-       y = "Batting ave.")
-  
+       y = "Mean batting average") 
+
+#We will incorporate trend using a natural cubic spine, using the ns function.
+fit3 <- gamlss(cbind(H, AB - H)
+               ~0 + ns(year, df = 5) +
+                 bats + log(AB),
+               data = career2,
+               family = BB(mu.link = "identity"))
 ```
 
