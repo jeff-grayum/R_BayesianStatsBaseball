@@ -556,7 +556,7 @@ new_eb <- career_eb_wAB %>%
   theme_tufte() +
   labs(x = "At-bats (log scale)",
        y = "EB estimate (including AB term)",
-       caption = "Notice: we know shrink towards *trend fit*, not overall ave.") +
+       caption = "Notice: we now shrink towards *trend fit*, not overall ave.") +
  expand_limits(y = c(0, 0.5)) +
   geom_hline(aes(yintercept = 0.261), color = "orange", lty = 2)
 
@@ -626,4 +626,22 @@ fit2 <- gamlss(cbind(H, AB - H)
                family = BB(mu.link = "identity"))
 
 tidy(fit2)
+```
+
+8.3 Over time
+```{r}
+#Notice how averages change over time! We need to incorporate this into our priors.
+career2 %>%
+  mutate(decade = (year %/%10) * 10) %>%
+  filter(average <= 0.35,
+         average > 0.13) %>%
+  ggplot(aes(decade, average, group = decade)) +
+  geom_boxplot() +
+  theme_few() +
+  expand_limits(ymin = 0, ymax = 0.4) +
+  labs(title = "Batting averages across decades",
+       x = "Decade",
+       y = "Batting ave.")
+  
+```
 
