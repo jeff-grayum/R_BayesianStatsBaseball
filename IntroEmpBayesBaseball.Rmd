@@ -642,11 +642,23 @@ career2 %>%
        x = "Decade",
        y = "Mean batting average") 
 
-#We will incorporate trend using a natural cubic spine, using the ns function.
+#We will incorporate the trend using a natural cubic spine, using the ns function.
 fit3 <- gamlss(cbind(H, AB - H)
                ~0 + ns(year, df = 5) +
                  bats + log(AB),
                data = career2,
                family = BB(mu.link = "identity"))
+```
+
+8.3.1
+```{r}
+#The advantage of being left handed changes over time...let's change the formula to allow for an interaction term that allows the advantage of being left handed change over time!
+
+fit4 <- gamlss(cbind(H, AB - H)
+               ~0 + ns(year, 5) * bats +
+                 log(AB),
+               data = career2,
+               family = BB(mu.link = "identity")) 
+
 ```
 
