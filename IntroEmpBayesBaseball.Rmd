@@ -671,6 +671,7 @@ players <- crossing(year = c(1915, 1965, 2015),
                     H = 30,
                     AB = 100) 
 
+
 players %>%
   view()
 
@@ -684,5 +685,41 @@ players_posterior <- players %>%
          beta1 = beta0 + AB - H)
 
 players_posterior
+```
+
+Ch. 9 Mixture models and expectation maximization
+```{r}
+pitchers <- Pitching %>%
+  group_by(playerID) %>%
+  summarize(gamesPitched = sum(G)) %>%
+  filter(gamesPitched > 3)
+
+career <- Batting %>%
+  filter(AB > 0, lgID == "NL",
+         yearID >= 1980) %>%
+  group_by(playerID) %>%
+  summarize(H = sum(H),
+            AB = sum(AB),
+            year = mean(yearID)) %>%
+  mutate(average = H / AB,
+         isPitcher = playerID %in% pitchers$playerID)
+
+#Add player names
+career <- Master %>%
+  tbl_df() %>%
+  dplyr::select(playerID, nameFirst, nameLast, bats) %>%
+  unite(name, nameFirst, nameLast, sep = " ") %>%
+  inner_join(career, by = "playerID")
+
+career %>%
+  filter(AB > 100) %>%
+  ggplot(aes(average, fill = !isPitcher)) +
+  geom_histogram() +
+  labs(title = "Distribution of batting averages, including pitchers (red)",
+       x = "Batting average (H / AB)",
+       y = "Count",
+       fill = "Pitcher") +
+  theme_hc() +
+  theme(legend.position = "none")
 ```
 
