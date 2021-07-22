@@ -662,3 +662,27 @@ fit4 <- gamlss(cbind(H, AB - H)
 
 ```
 
+8.3.2 Posterior distributions
+```{r}
+#How would the posterior distribution for a batter with 30/100 hits change in different years?
+
+players <- crossing(year = c(1915, 1965, 2015),
+                    bats = c("L", "R"),
+                    H = 30,
+                    AB = 100) 
+
+players %>%
+  view()
+
+players_posterior <- players %>%
+  mutate(mu = predict(fit4, what = "mu", newdata = players),
+         sigma = predict(fit4, what = "sigma",
+                         newdata = players, type = "response"),
+         alpha0 = mu / sigma,
+         beta0 = (1 - mu) / sigma,
+         alpha1 = alpha0 + H,
+         beta1 = beta0 + AB - H)
+
+players_posterior
+```
+
